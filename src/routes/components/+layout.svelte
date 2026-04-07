@@ -4,6 +4,7 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import TableIcon from '@lucide/svelte/icons/table-2';
+	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import GaugeIcon from '@lucide/svelte/icons/gauge';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import LayoutGridIcon from '@lucide/svelte/icons/layout-grid';
@@ -18,7 +19,8 @@
 	};
 
 	const components: NavItem[] = [
-		{ label: 'Virtual Table', href: '/components/virtual-table', icon: TableIcon }
+		{ label: 'Virtual Table', href: '/components/virtual-table', icon: TableIcon },
+		{ label: 'Balatro Card', href: '/components/balatro-card', icon: SparklesIcon }
 	];
 
 	const tools: NavItem[] = [
