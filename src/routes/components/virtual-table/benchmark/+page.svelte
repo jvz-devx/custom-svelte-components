@@ -235,8 +235,8 @@
 	}
 </script>
 
-<div class="min-h-screen bg-background">
-	<div class="container mx-auto max-w-[1000px] px-4 py-6">
+<div class="bg-background">
+	<div class="mx-auto max-w-[1000px] p-6">
 		<div class="mb-6">
 			<h1 class="text-3xl font-bold tracking-tight">Height Measurement Benchmark</h1>
 			<p class="mt-1 text-muted-foreground">
