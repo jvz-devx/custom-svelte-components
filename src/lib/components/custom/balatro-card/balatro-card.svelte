@@ -4,7 +4,7 @@
 	import { renderCardFace } from './card-face.js';
 	import { renderSpriteCardFace } from './sprite-card-face.js';
 	import { renderShaderCard, renderShaderOverlay, invalidateTexture } from './shader-renderer.js';
-	import { tilt, TiltState } from './tilt.svelte.js';
+	import { tilt, TiltState, type TiltAction } from './tilt.svelte.js';
 	import type { BalatroCardProps } from './types.js';
 
 	let {
@@ -26,12 +26,12 @@
 
 	let baseImgEl = $state<HTMLImageElement | null>(null);
 	let overlayImgEl = $state<HTMLImageElement | null>(null);
-	let showFlash = $state(false);
+	let flashEl = $state<HTMLDivElement | null>(null);
+	let tiltAction: TiltAction | null = null;
 
 	function handleClick() {
 		onclick?.();
-		showFlash = true;
-		setTimeout(() => (showFlash = false), 150);
+		tiltAction?.triggerFlash();
 	}
 	let animTime = 0;
 	let animFrame = 0;
@@ -160,19 +160,31 @@
 			}
 		};
 	});
+
+	// Wire up flash element and played trigger
+	$effect(() => {
+		if (tiltAction && flashEl) {
+			tiltAction.setFlashEl(flashEl);
+		}
+	});
+
+	$effect(() => {
+		if (played && tiltAction) {
+			tiltAction.triggerPlayed();
+		}
+	});
 </script>
 
 <div
 	class={cn(
 		'relative inline-block cursor-pointer select-none',
 		disabled && 'pointer-events-none opacity-50',
-		played && 'balatro-played',
 		selected && '-translate-y-4',
 		className
 	)}
 	style="width: {width}px; height: {height}px; border-radius: {width * 0.1}px; z-index: {tiltState.hovering ? 50 : selected ? 40 : 'auto'};"
 	style:will-change="transform"
-	use:tilt={{ state: tiltState, cardIndex }}
+	use:tilt={{ state: tiltState, cardIndex, onInit: (a) => { tiltAction = a; } }}
 	onclick={handleClick}
 	onkeydown={(e) => e.key === 'Enter' && handleClick()}
 	role="button"
@@ -249,13 +261,12 @@
 		></div>
 	{/if}
 
-	<!-- Click flash overlay -->
-	{#if showFlash}
-		<div
-			class="pointer-events-none absolute inset-0 balatro-click-flash"
-			style="border-radius: {width * 0.1}px; background: white;"
-		></div>
-	{/if}
+	<!-- Click flash overlay (JS-driven opacity) -->
+	<div
+		bind:this={flashEl}
+		class="pointer-events-none absolute inset-0"
+		style="border-radius: {width * 0.1}px; background: white; opacity: 0;"
+	></div>
 
 	<!-- Selection glow -->
 	{#if selected}
@@ -268,34 +279,3 @@
 		></div>
 	{/if}
 </div>
-
-<style>
-	@keyframes click-flash {
-		from {
-			opacity: 0.4;
-		}
-		to {
-			opacity: 0;
-		}
-	}
-
-	.balatro-click-flash {
-		animation: click-flash 150ms ease-out forwards;
-	}
-
-	@keyframes played-zoom {
-		0% {
-			transform: scale(1) translateY(0);
-			opacity: 1;
-		}
-		100% {
-			transform: scale(1.5) translateY(-80px);
-			opacity: 0;
-		}
-	}
-
-	:global(.balatro-played) {
-		animation: played-zoom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-		pointer-events: none;
-	}
-</style>

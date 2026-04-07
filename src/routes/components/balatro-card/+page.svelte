@@ -170,9 +170,13 @@
 			<Card.Description>Click cards to select. Shows hover tilt + selection state.</Card.Description>
 		</Card.Header>
 		<Card.Content>
-			<div class="card-hand flex items-end justify-center py-6">
+			<div class="card-hand flex items-end justify-center pb-10 pt-6">
 				{#each hand as card, i}
-					<div class="card-in-hand">
+					{@const count = hand.length}
+					{@const normalizedPos = count <= 1 ? 0 : (i - (count - 1) / 2) / ((count - 1) / 2)}
+					{@const yOffset = normalizedPos * normalizedPos * 20}
+					{@const zRotation = normalizedPos * -3}
+					<div class="card-in-hand" style="transform: translateY({yOffset}px) rotate({zRotation}deg);">
 						<BalatroCard
 							rank={card.rank}
 							suit={card.suit}

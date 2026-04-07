@@ -1,5 +1,30 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TiltState, tilt } from './tilt.svelte.js';
+import { TiltState, Punch, tilt } from './tilt.svelte.js';
+
+describe('Punch', () => {
+	it('returns 0 when inactive', () => {
+		const p = new Punch();
+		expect(p.update(0.016)).toBe(0);
+	});
+
+	it('produces decaying vibrato', () => {
+		const p = new Punch();
+		p.start(5, 0.3, 10);
+		const v1 = Math.abs(p.update(0.05));
+		const v2 = Math.abs(p.update(0.05));
+		// Should produce non-zero values
+		expect(v1).toBeGreaterThan(0);
+		expect(v2).toBeGreaterThan(0);
+	});
+
+	it('deactivates after duration', () => {
+		const p = new Punch();
+		p.start(5, 0.1, 10);
+		p.update(0.2); // exceeds duration
+		expect(p.active).toBe(false);
+		expect(p.update(0.016)).toBe(0);
+	});
+});
 
 describe('TiltState', () => {
 	it('initializes with default values', () => {
@@ -67,11 +92,15 @@ describe('tilt action', () => {
 		expect(addSpy).toHaveBeenCalledWith('pointermove', expect.any(Function));
 		expect(addSpy).toHaveBeenCalledWith('pointerenter', expect.any(Function));
 		expect(addSpy).toHaveBeenCalledWith('pointerleave', expect.any(Function));
+		expect(addSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+		expect(addSpy).toHaveBeenCalledWith('pointerup', expect.any(Function));
 
 		result.destroy();
 		expect(removeSpy).toHaveBeenCalledWith('pointermove', expect.any(Function));
 		expect(removeSpy).toHaveBeenCalledWith('pointerenter', expect.any(Function));
 		expect(removeSpy).toHaveBeenCalledWith('pointerleave', expect.any(Function));
+		expect(removeSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+		expect(removeSpy).toHaveBeenCalledWith('pointerup', expect.any(Function));
 	});
 
 	it('starts animation immediately', () => {
@@ -110,20 +139,16 @@ describe('tilt action', () => {
 
 	it('updates x/y on pointermove normalized to center', () => {
 		tilt(node, { state });
-		// rect: left=0, top=0, width=150, height=210
-		// center = (75, 105), halfW = 75, halfH = 105
-		// clientX=75, clientY=105 → x=0, y=0 (dead center)
 		node.dispatchEvent(new PointerEvent('pointermove', { clientX: 75, clientY: 105 }));
 		expect(state.x).toBeCloseTo(0);
 		expect(state.y).toBeCloseTo(0);
 
-		// clientX=150, clientY=210 → x=1, y=1 (bottom-right corner)
 		node.dispatchEvent(new PointerEvent('pointermove', { clientX: 150, clientY: 210 }));
 		expect(state.x).toBeCloseTo(1);
 		expect(state.y).toBeCloseTo(1);
 	});
 
-	it('applies transform with perspective, rotateX, rotateY, rotate, and scale on animate', () => {
+	it('applies transform with perspective, rotateX, rotateY, rotate, translateY, and scale on animate', () => {
 		vi.useFakeTimers();
 		let rafCallback: FrameRequestCallback | null = null;
 		vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
@@ -135,6 +160,7 @@ describe('tilt action', () => {
 		(rafCallback as FrameRequestCallback | null)?.(16);
 
 		expect(node.style.transform).toContain('perspective');
+		expect(node.style.transform).toContain('translateY');
 		expect(node.style.transform).toContain('rotateX');
 		expect(node.style.transform).toContain('rotateY');
 		expect(node.style.transform).toContain('rotate(');
@@ -151,5 +177,27 @@ describe('tilt action', () => {
 		const result = tilt(node, { state });
 		result.destroy();
 		expect(cancelSpy).toHaveBeenCalledWith(42);
+	});
+
+	it('calls onInit callback with the action object', () => {
+		const onInit = vi.fn();
+		tilt(node, { state, onInit });
+		expect(onInit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				destroy: expect.any(Function),
+				triggerSelect: expect.any(Function),
+				triggerFlash: expect.any(Function),
+				triggerPlayed: expect.any(Function),
+				setFlashEl: expect.any(Function)
+			})
+		);
+	});
+
+	it('exposes triggerSelect that activates punches', () => {
+		const result = tilt(node, { state });
+		// Should not throw
+		result.triggerSelect(1);
+		result.triggerSelect(-1);
+		result.destroy();
 	});
 });
