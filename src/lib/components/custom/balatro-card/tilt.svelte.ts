@@ -36,12 +36,14 @@ function lerpAngle(current: number, target: number, t: number): number {
 }
 
 export function tilt(node: HTMLElement, opts: { state: TiltState; cardIndex?: number }) {
-	const AUTO_TILT_AMOUNT = 30;
-	const MANUAL_TILT_AMOUNT = 20;
-	const TILT_SPEED = 20;
+	// Unity values scaled for CSS perspective (Unity 3D camera compresses rotation visually,
+	// CSS perspective(600px) on a ~150px card does not — so we reduce by ~10x)
+	const AUTO_TILT_AMOUNT = 3; // Unity: 30 → subtle idle wobble
+	const MANUAL_TILT_AMOUNT = 8; // Unity: 20 → responsive mouse tilt
+	const TILT_SPEED = 10; // Unity: 20 → smooth interpolation
 	const SCALE_ON_HOVER = 1.15;
 	const SCALE_TRANSITION = 0.15; // seconds
-	const HOVER_PUNCH_ANGLE = 5;
+	const HOVER_PUNCH_ANGLE = 3; // Unity: 5 → brief rotation punch
 	const SHADOW_OFFSET = 20;
 
 	const s = opts.state;

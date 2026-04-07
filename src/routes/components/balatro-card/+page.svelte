@@ -14,7 +14,7 @@
 	let selectedSuit = $state<CardSuit>('spades');
 	let selectedRank = $state<CardRank>('A');
 	let cardWidth = $state(150);
-	let useSprites = $state(false);
+	let useSprites = $state(true);
 	let selectedCards = $state<Set<number>>(new Set());
 
 	function toggleCard(index: number) {
@@ -200,15 +200,28 @@
 
 <style>
 	.card-in-hand {
-		margin: 0 -12px;
-		transition: margin 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+		margin: 0 -15px;
+		transition: margin 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+			transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
+	/* When hovering the hand area, spread all cards a bit */
 	.card-hand:hover .card-in-hand {
-		margin: 0 4px;
+		margin: 0 2px;
 	}
 
+	/* The hovered card gets more space */
 	.card-in-hand:hover {
-		margin: 0 16px;
+		margin: 0 20px;
+	}
+
+	/* Adjacent siblings of hovered card get medium space */
+	.card-in-hand:hover + .card-in-hand {
+		margin: 0 8px;
+	}
+
+	/* Card before hovered (using has — next sibling is hovered) */
+	.card-in-hand:has(+ .card-in-hand:hover) {
+		margin: 0 8px;
 	}
 </style>

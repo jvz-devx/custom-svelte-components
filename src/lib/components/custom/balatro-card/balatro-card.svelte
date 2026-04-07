@@ -183,7 +183,7 @@
 		bind:this={baseImgEl}
 		alt="{rank} of {suit}"
 		class="absolute inset-0 h-full w-full"
-		style="border-radius: {width * 0.1}px;"
+		style="border-radius: {width * 0.1}px; image-rendering: pixelated;"
 		draggable="false"
 	/>
 
