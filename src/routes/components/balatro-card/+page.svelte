@@ -51,9 +51,9 @@
 		</Card.Header>
 		<Card.Content>
 			<div class="flex flex-wrap items-end justify-center gap-8 py-4">
-				{#each editions as edition}
+				{#each editions as edition, i}
 					<div class="flex flex-col items-center gap-3">
-						<BalatroCard rank="A" suit="spades" {edition} width={cardWidth} {useSprites} />
+						<BalatroCard rank="A" suit="spades" {edition} width={cardWidth} {useSprites} cardIndex={i} />
 						<Badge variant={edition === 'base' ? 'outline' : 'default'}>
 							{edition}
 						</Badge>
@@ -79,6 +79,7 @@
 						edition={selectedEdition}
 						width={cardWidth}
 						{useSprites}
+						cardIndex={10}
 					/>
 				</div>
 
@@ -178,6 +179,7 @@
 							edition={card.edition}
 							width={130}
 							{useSprites}
+							cardIndex={i}
 							selected={selectedCards.has(i)}
 							onclick={() => toggleCard(i)}
 						/>

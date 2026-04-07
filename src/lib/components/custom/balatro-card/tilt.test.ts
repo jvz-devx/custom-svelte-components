@@ -7,8 +7,10 @@ describe('TiltState', () => {
 		expect(state.x).toBe(0);
 		expect(state.y).toBe(0);
 		expect(state.hovering).toBe(false);
-		expect(state.angle).toBe(0);
-		expect(state.mouseVerticalPosition).toBe(0);
+		expect(state.tiltX).toBe(0);
+		expect(state.tiltY).toBe(0);
+		expect(state.currentScale).toBe(1);
+		expect(state.cardIndex).toBe(0);
 	});
 
 	it('is mutable', () => {
@@ -16,13 +18,17 @@ describe('TiltState', () => {
 		state.x = 0.5;
 		state.y = -0.3;
 		state.hovering = true;
-		state.angle = 1.5;
-		state.mouseVerticalPosition = 0.8;
+		state.tiltX = 10;
+		state.tiltY = 20;
+		state.currentScale = 1.15;
+		state.cardIndex = 3;
 		expect(state.x).toBe(0.5);
 		expect(state.y).toBe(-0.3);
 		expect(state.hovering).toBe(true);
-		expect(state.angle).toBe(1.5);
-		expect(state.mouseVerticalPosition).toBe(0.8);
+		expect(state.tiltX).toBe(10);
+		expect(state.tiltY).toBe(20);
+		expect(state.currentScale).toBe(1.15);
+		expect(state.cardIndex).toBe(3);
 	});
 });
 
@@ -75,6 +81,16 @@ describe('tilt action', () => {
 		rafSpy.mockRestore();
 	});
 
+	it('sets cardIndex from opts', () => {
+		tilt(node, { state, cardIndex: 5 });
+		expect(state.cardIndex).toBe(5);
+	});
+
+	it('defaults cardIndex to 0', () => {
+		tilt(node, { state });
+		expect(state.cardIndex).toBe(0);
+	});
+
 	it('sets hovering to true on pointerenter', () => {
 		tilt(node, { state });
 		node.dispatchEvent(new PointerEvent('pointerenter'));
@@ -92,20 +108,22 @@ describe('tilt action', () => {
 		expect(state.y).toBe(0);
 	});
 
-	it('updates x/y on pointermove with correct formula', () => {
+	it('updates x/y on pointermove normalized to center', () => {
 		tilt(node, { state });
-		// width=150, height=210
-		// x = clientX - left = 75, halfW = 150/1.5 = 100
-		// state.x = ((75 - 100) / 100) * 0.5 = -0.125
-		// y = clientY - top = 105, halfH = 210/1.5 = 140
-		// state.y = ((105 - 140) / 140) * 0.5 = -0.125
+		// rect: left=0, top=0, width=150, height=210
+		// center = (75, 105), halfW = 75, halfH = 105
+		// clientX=75, clientY=105 → x=0, y=0 (dead center)
 		node.dispatchEvent(new PointerEvent('pointermove', { clientX: 75, clientY: 105 }));
-		expect(state.x).toBeCloseTo(-0.125);
-		expect(state.y).toBeCloseTo(-0.125);
-		expect(state.mouseVerticalPosition).toBeCloseTo(0.5);
+		expect(state.x).toBeCloseTo(0);
+		expect(state.y).toBeCloseTo(0);
+
+		// clientX=150, clientY=210 → x=1, y=1 (bottom-right corner)
+		node.dispatchEvent(new PointerEvent('pointermove', { clientX: 150, clientY: 210 }));
+		expect(state.x).toBeCloseTo(1);
+		expect(state.y).toBeCloseTo(1);
 	});
 
-	it('applies transform with perspective and rotateX/rotateY on animate', () => {
+	it('applies transform with perspective, rotateX, rotateY, rotate, and scale on animate', () => {
 		vi.useFakeTimers();
 		let rafCallback: FrameRequestCallback | null = null;
 		vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
@@ -119,6 +137,8 @@ describe('tilt action', () => {
 		expect(node.style.transform).toContain('perspective');
 		expect(node.style.transform).toContain('rotateX');
 		expect(node.style.transform).toContain('rotateY');
+		expect(node.style.transform).toContain('rotate(');
+		expect(node.style.transform).toContain('scale(');
 		expect(node.style.boxShadow).toContain('rgba');
 
 		vi.useRealTimers();

@@ -172,7 +172,7 @@
 	)}
 	style="width: {width}px; height: {height}px; border-radius: {width * 0.1}px; z-index: {tiltState.hovering ? 50 : selected ? 40 : 'auto'};"
 	style:will-change="transform"
-	use:tilt={{ state: tiltState }}
+	use:tilt={{ state: tiltState, cardIndex }}
 	onclick={handleClick}
 	onkeydown={(e) => e.key === 'Enter' && handleClick()}
 	role="button"
