@@ -1,0 +1,9 @@
+node_modules
+.svelte-kit
+build
+.git
+.credentials
+.env
+.env.*
+*.md
+docs/

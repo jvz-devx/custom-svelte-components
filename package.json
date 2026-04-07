@@ -53,6 +53,7 @@
 	},
 	"dependencies": {
 		"@chenglou/pretext": "^0.0.4",
+		"@sveltejs/adapter-node": "^5.5.4",
 		"@threlte/core": "^8.5.7",
 		"@threlte/extras": "^9.14.4",
 		"@types/three": "^0.183.1",
