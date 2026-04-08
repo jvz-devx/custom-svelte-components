@@ -3,6 +3,9 @@
 	import { Moveable } from '$lib/components/custom/balatro-card/moveable.svelte.js';
 	import type { CardEdition, CardRank, CardSuit } from '$lib/components/custom/balatro-card/types.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+
+	let docsOpen = $state(false);
 
 	const CARD_W = 110;
 	const CARD_H = Math.round(CARD_W * (47 / 35));
@@ -119,6 +122,12 @@
 				>
 					CRT {crtEnabled ? 'ON' : 'OFF'}
 				</button>
+				<button
+					class="rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white/90 backdrop-blur transition-colors hover:bg-white/20"
+					onclick={() => (docsOpen = true)}
+				>
+					Docs
+				</button>
 			{:else}
 				<Button variant="outline" size="sm" onclick={() => (theme = 'balatro')}>
 					Theme: shadcn
@@ -130,6 +139,9 @@
 				>
 					CRT {crtEnabled ? 'ON' : 'OFF'}
 				</Button>
+				<Button variant="outline" size="sm" onclick={() => (docsOpen = true)}>
+					Docs
+				</Button>
 			{/if}
 		</div>
 	</div>
@@ -137,6 +149,10 @@
 	<!-- Game area -->
 	{#snippet content()}
 		<div class="relative z-10 mx-auto flex max-w-[900px] flex-col items-center gap-4 px-6 py-6">
+			<!-- Sprite copyright banner -->
+			<div class="mx-auto mb-4 max-w-[900px] rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-sm {isBalatro ? 'text-amber-200' : 'text-amber-800'}">
+				This demo uses Balatro game sprites for illustration. Balatro is &copy; LocalThunk. Provide your own sprite assets for production use.
+			</div>
 			<!-- Joker bar -->
 			<div class="flex flex-col items-center gap-1">
 				<span
@@ -300,3 +316,197 @@
 		{@render content()}
 	{/if}
 </div>
+
+<!-- Documentation Dialog -->
+<Dialog.Root bind:open={docsOpen}>
+	<Dialog.Content class="max-h-[85vh] max-w-3xl overflow-y-auto">
+		<Dialog.Header>
+			<Dialog.Title>Balatro Card Components -- API Reference</Dialog.Title>
+			<Dialog.Description>
+				Component documentation and usage examples for the Balatro card system.
+			</Dialog.Description>
+		</Dialog.Header>
+
+		<div class="space-y-6 py-4">
+			<!-- Overview -->
+			<section>
+				<h3 class="text-lg font-semibold">Overview</h3>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Balatro-style card presentation system for Svelte 5. Includes T/VT dual-transform physics engine, WebGL2 edition shaders (foil, polychrome, negative, holo), hand fan layout with drag-to-reorder, CRT post-processing, and animated background shader. All physics and shader values ported from the original Balatro source code.
+				</p>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- BalatroCard -->
+			<section>
+				<h3 class="text-lg font-semibold"><code>BalatroCard</code></h3>
+				<p class="mt-1 text-sm text-muted-foreground">Single card with edition shader effects.</p>
+				<div class="mt-3 overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="py-2 pr-4 text-left font-medium">Prop</th>
+								<th class="py-2 pr-4 text-left font-medium">Type</th>
+								<th class="py-2 pr-4 text-left font-medium">Default</th>
+								<th class="py-2 text-left font-medium">Description</th>
+							</tr>
+						</thead>
+						<tbody class="text-muted-foreground">
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">rank</td><td class="py-1.5 pr-4">CardRank</td><td class="py-1.5 pr-4">'A'</td><td class="py-1.5">Card rank (A, 2-10, J, Q, K)</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">suit</td><td class="py-1.5 pr-4">CardSuit</td><td class="py-1.5 pr-4">'spades'</td><td class="py-1.5">Card suit</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">edition</td><td class="py-1.5 pr-4">CardEdition</td><td class="py-1.5 pr-4">'base'</td><td class="py-1.5">Shader edition (base, foil, polychrome, negative, holo)</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">width</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">150</td><td class="py-1.5">Card width in pixels (height auto: width * 47/35)</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">jokerPos</td><td class="py-1.5 pr-4">{'{col, row}'}</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">If set, renders a joker sprite instead</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">selected</td><td class="py-1.5 pr-4">boolean</td><td class="py-1.5 pr-4">false</td><td class="py-1.5">Visual selection state</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">moveable</td><td class="py-1.5 pr-4">Moveable</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">External Moveable for CardArea integration</td></tr>
+							<tr><td class="py-1.5 pr-4 font-mono text-xs">cardIndex</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">0</td><td class="py-1.5">Unique index for per-card shader animation</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- CardArea -->
+			<section>
+				<h3 class="text-lg font-semibold"><code>CardArea</code></h3>
+				<p class="mt-1 text-sm text-muted-foreground">Layout container with physics and drag-to-reorder.</p>
+				<div class="mt-3 overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="py-2 pr-4 text-left font-medium">Prop</th>
+								<th class="py-2 pr-4 text-left font-medium">Type</th>
+								<th class="py-2 pr-4 text-left font-medium">Default</th>
+								<th class="py-2 text-left font-medium">Description</th>
+							</tr>
+						</thead>
+						<tbody class="text-muted-foreground">
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">type</td><td class="py-1.5 pr-4">'hand' | 'play' | 'shop' | 'joker'</td><td class="py-1.5 pr-4">'hand'</td><td class="py-1.5">Layout algorithm</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">cards</td><td class="py-1.5 pr-4">Moveable[]</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">Array of Moveables to position</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">areaWidth</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">Container width (px)</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">areaHeight</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">Container height (px)</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">cardW / cardH</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">Card dimensions (px)</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">maxCards</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">cards.length</td><td class="py-1.5">Max slots for spread calculation</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">highlightLimit</td><td class="py-1.5 pr-4">number</td><td class="py-1.5 pr-4">5</td><td class="py-1.5">Max selectable cards</td></tr>
+							<tr><td class="py-1.5 pr-4 font-mono text-xs">onCardClick</td><td class="py-1.5 pr-4">(index) =&gt; void</td><td class="py-1.5 pr-4">--</td><td class="py-1.5">Click callback</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- Moveable -->
+			<section>
+				<h3 class="text-lg font-semibold"><code>Moveable</code></h3>
+				<p class="mt-1 text-sm text-muted-foreground">Physics state object with T/VT dual transforms.</p>
+				<pre class="mt-3 rounded bg-muted p-3 text-xs"><code>const m = new Moveable(x, y, w, h);
+m.data = {'{'} rank: 'A', suit: 'spades', edition: 'foil' {'}'};
+m.highlighted = true;  // raises card in hand
+m.juiceUp(0.05, 0.03); // pop animation
+m.flip();               // card flip</code></pre>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- CrtOverlay -->
+			<section>
+				<h3 class="text-lg font-semibold"><code>CrtOverlay</code></h3>
+				<p class="mt-1 text-sm text-muted-foreground">CSS scanline + vignette overlay.</p>
+				<div class="mt-3 overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="py-2 pr-4 text-left font-medium">Prop</th>
+								<th class="py-2 pr-4 text-left font-medium">Type</th>
+								<th class="py-2 text-left font-medium">Default</th>
+							</tr>
+						</thead>
+						<tbody class="text-muted-foreground">
+							<tr><td class="py-1.5 pr-4 font-mono text-xs">intensity</td><td class="py-1.5 pr-4">number</td><td class="py-1.5">100 (0-100)</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- BalatroBackground -->
+			<section>
+				<h3 class="text-lg font-semibold"><code>BalatroBackground</code></h3>
+				<p class="mt-1 text-sm text-muted-foreground">Animated shader background.</p>
+				<div class="mt-3 overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="py-2 pr-4 text-left font-medium">Prop</th>
+								<th class="py-2 pr-4 text-left font-medium">Type</th>
+								<th class="py-2 text-left font-medium">Default</th>
+							</tr>
+						</thead>
+						<tbody class="text-muted-foreground">
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">colour1-3</td><td class="py-1.5 pr-4">[r,g,b,a]</td><td class="py-1.5">Balatro dark blue-grey</td></tr>
+							<tr class="border-b border-border/50"><td class="py-1.5 pr-4 font-mono text-xs">contrast</td><td class="py-1.5 pr-4">number</td><td class="py-1.5">1</td></tr>
+							<tr><td class="py-1.5 pr-4 font-mono text-xs">spinAmount</td><td class="py-1.5 pr-4">number</td><td class="py-1.5">0.3</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- Editions -->
+			<section>
+				<h3 class="text-lg font-semibold">Editions</h3>
+				<ul class="mt-2 space-y-1 text-sm text-muted-foreground">
+					<li><strong>base</strong> -- No shader effect</li>
+					<li><strong>foil</strong> -- Blue-silver metallic shimmer</li>
+					<li><strong>polychrome</strong> -- Rainbow hue shift with Perlin noise field</li>
+					<li><strong>negative</strong> -- HSL lightness inversion with brownish tint</li>
+					<li><strong>holo</strong> -- Rainbow grid pattern overlay</li>
+				</ul>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- Quick Start -->
+			<section>
+				<h3 class="text-lg font-semibold">Quick Start</h3>
+				<pre class="mt-3 overflow-x-auto rounded bg-muted p-3 text-xs"><code>&lt;script&gt;
+  import {'{'} BalatroCard, CardArea, Moveable {'}'} from '$lib/components/custom/balatro-card';
+
+  const cards = Array.from({'{'} length: 5 {'}'}, () =&gt; {'{'}{'\n'}    const m = new Moveable(0, 0, 120, 163);
+    m.data = {'{'} rank: 'A', suit: 'spades', edition: 'foil' {'}'};
+    return m;
+  {'}'});
+&lt;/script&gt;
+
+&lt;CardArea type="hand" {'{'}cards{'}'} areaWidth={'{'}700{'}'} areaHeight={'{'}250{'}'} cardW={'{'}120{'}'} cardH={'{'}163{'}'}&gt;
+  {'{'}#each cards as card, i{'}'}
+    &lt;BalatroCard
+      rank={'{'}card.data.rank{'}'}
+      suit={'{'}card.data.suit{'}'}
+      edition={'{'}card.data.edition{'}'}
+      width={'{'}120{'}'}
+      cardIndex={'{'}i{'}'}
+      moveable={'{'}card{'}'}
+      selected={'{'}card.highlighted{'}'}
+    /&gt;
+  {'{'}\/each{'}'}
+&lt;/CardArea&gt;</code></pre>
+			</section>
+
+			<hr class="border-border" />
+
+			<!-- Sprites -->
+			<section>
+				<h3 class="text-lg font-semibold">Sprites</h3>
+				<p class="mt-1 text-sm text-muted-foreground">
+					The component uses a sprite atlas system. Provide your own sprite sheet at <code class="rounded bg-muted px-1 py-0.5 text-xs">/sprites/cards/playing-cards-sheet.png</code> (13 columns x 4 rows, 142x190px per tile) and joker sprites at <code class="rounded bg-muted px-1 py-0.5 text-xs">/sprites/jokers/joker_{'{col}'}x{'{row}'}.png</code>.
+				</p>
+			</section>
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
