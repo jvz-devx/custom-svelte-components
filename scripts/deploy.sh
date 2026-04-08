@@ -1,43 +1,43 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# Load credentials
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../.credentials"
 
 IMAGE="ghcr.io/jvz-devx/custom-svelte-components:latest"
 CONTAINER="svelte-components"
+GHCR_TOKEN="$(gh auth token)"
 
 echo "==> Deploying $IMAGE to $SERVER_HOST"
 
-# SSH and deploy
-ssh-keygen -R "$SERVER_HOST" 2>/dev/null || true
-sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" bash -s <<EOF
+ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" bash <<REMOTE
   set -e
 
+  echo "==> Logging into GHCR..."
+  echo "$GHCR_TOKEN" | sudo docker login ghcr.io -u jvz-devx --password-stdin
+
   echo "==> Pulling image..."
-  docker pull "$IMAGE" || {
-    echo "Pull failed — trying with auth..."
-    echo "$SERVER_PASSWORD" | docker login ghcr.io -u jvz-devx --password-stdin
-    docker pull "$IMAGE"
-  }
+  sudo docker pull "$IMAGE"
 
   echo "==> Stopping old container..."
-  docker stop $CONTAINER 2>/dev/null || true
-  docker rm $CONTAINER 2>/dev/null || true
+  sudo docker stop $CONTAINER 2>/dev/null || true
+  sudo docker rm $CONTAINER 2>/dev/null || true
 
   echo "==> Starting new container..."
-  docker run -d \
+  sudo docker run -d \
     --name $CONTAINER \
     --restart unless-stopped \
     -p 3000:3000 \
     $IMAGE
 
   echo "==> Cleaning up..."
-  docker image prune -f
+  sudo docker image prune -f
 
-  echo "==> Done! Running:"
-  docker ps --filter name=$CONTAINER --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
-EOF
+  echo "==> Status:"
+  sudo docker ps --filter name=$CONTAINER --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+REMOTE
 
-echo "==> Live at http://$SERVER_HOST:3000"
+echo ""
+echo "========================================="
+echo "  Live at http://$SERVER_HOST:3000"
+echo "========================================="
