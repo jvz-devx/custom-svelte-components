@@ -1,5 +1,5 @@
-// Balatro polychrome.fs — exact port to WebGL2
-// 3-component Perlin-like noise field with HSL color rotation
+// Balatro holo.fs — exact port to WebGL2
+// Rainbow grid pattern with iridescent HSL rotation
 
 uniform float time;
 uniform vec2 mouse;
@@ -98,20 +98,13 @@ void main()
     vec4 tex = texture2D(cardTexture, vUv);
     vec2 uv = (((vUv)*(image_details)) - texture_details.xy*texture_details.ba)/texture_details.ba;
 
-    // polychrome vec2 from Balatro: [send_to_shader[1], send_to_shader[2]]
-    vec2 polychrome = edition_params;
+    vec2 holo = edition_params;
 
-    float low = min(tex.r, min(tex.g, tex.b));
-    float high = max(tex.r, max(tex.g, tex.b));
-    float delta = high - low;
+    vec4 hsl = HSL(0.5*tex + 0.5*vec4(0.,0.,1.,tex.a));
 
-    float saturation_fac = 1. - max(0., 0.05*(1.1-delta));
-
-    vec4 hsl = HSL(vec4(tex.r*saturation_fac, tex.g*saturation_fac, tex.b, tex.a));
-
-    float t = polychrome.y*2.221 + time;
+    float t = holo.y*7.221 + time;
     vec2 floored_uv = (floor((uv*texture_details.ba)))/texture_details.ba;
-    vec2 uv_scaled_centered = (floored_uv - 0.5) * 50.;
+    vec2 uv_scaled_centered = (floored_uv - 0.5) * 250.;
 
     vec2 field_part1 = uv_scaled_centered + 50.*vec2(sin(-t / 143.6340), cos(-t / 99.4324));
     vec2 field_part2 = uv_scaled_centered + 50.*vec2(cos( t / 53.1532),  cos( t / 61.4532));
@@ -121,11 +114,20 @@ void main()
         cos(length(field_part1) / 19.483) + sin(length(field_part2) / 33.155) * cos(field_part2.y / 15.73) +
         cos(length(field_part3) / 27.193) * sin(field_part3.x / 21.92) ))/2.;
 
-    float res = (.5 + .5* cos( (polychrome.x) * 2.612 + ( field + -.5 ) *3.14));
-    hsl.x = hsl.x+ res + polychrome.y*0.04;
-    hsl.y = min(0.6,hsl.y+0.5);
+    float res = (.5 + .5* cos( (holo.x) * 2.612 + ( field + -.5 ) *3.14));
 
-    tex.rgb = RGB(hsl).rgb;
+    float low = min(tex.r, min(tex.g, tex.b));
+    float high = max(tex.r, max(tex.g, tex.b));
+    float delta = 0.2+0.3*(high- low) + 0.1*high;
+
+    float gridsize = 0.79;
+    float fac = 0.5*max(max(max(0., 7.*abs(cos(uv.x*gridsize*20.))-6.),max(0., 7.*cos(uv.y*gridsize*45. + uv.x*gridsize*20.)-6.)), max(0., 7.*cos(uv.y*gridsize*45. - uv.x*gridsize*20.)-6.));
+
+    hsl.x = hsl.x + res + fac;
+    hsl.y = hsl.y*1.3;
+    hsl.z = hsl.z*0.6+0.4;
+
+    tex =(1.-delta)*tex + delta*RGB(hsl)*vec4(0.9,0.8,1.2,tex.a);
 
     if (tex[3] < 0.7)
         tex[3] = tex[3]/3.;

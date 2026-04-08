@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { BalatroCard } from '$lib/components/custom/balatro-card/index.js';
+	import { BalatroCard, CardArea, CrtOverlay } from '$lib/components/custom/balatro-card/index.js';
+	import { Moveable } from '$lib/components/custom/balatro-card/moveable.svelte.js';
 	import type { CardEdition, CardRank, CardSuit } from '$lib/components/custom/balatro-card/types.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
 
-	const editions: CardEdition[] = ['base', 'foil', 'polychrome', 'negative'];
+	const editions: CardEdition[] = ['base', 'foil', 'polychrome', 'negative', 'holo'];
 	const suits: CardSuit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
 	const ranks: CardRank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
@@ -14,32 +14,43 @@
 	let selectedSuit = $state<CardSuit>('spades');
 	let selectedRank = $state<CardRank>('A');
 	let cardWidth = $state(150);
-	let useSprites = $state(true);
-	let selectedCards = $state<Set<number>>(new Set());
+	let crtEnabled = $state(true);
+	let crtIntensity = $state(100);
 
-	function toggleCard(index: number) {
-		const next = new Set(selectedCards);
-		if (next.has(index)) next.delete(index);
-		else next.add(index);
-		selectedCards = next;
-	}
+	// Hand demo — Moveable-based
+	const HAND_CARD_W = 130;
+	const HAND_CARD_H = Math.round(HAND_CARD_W * (47 / 35));
+	const HAND_AREA_W = 800;
+	const HAND_AREA_H = 300;
 
-	// Sample hand
-	const hand: { rank: CardRank; suit: CardSuit; edition: CardEdition }[] = [
+	const handData: { rank: CardRank; suit: CardSuit; edition: CardEdition }[] = [
 		{ rank: 'A', suit: 'spades', edition: 'foil' },
 		{ rank: 'K', suit: 'hearts', edition: 'polychrome' },
 		{ rank: 'Q', suit: 'diamonds', edition: 'negative' },
 		{ rank: 'J', suit: 'clubs', edition: 'base' },
 		{ rank: '10', suit: 'spades', edition: 'foil' }
 	];
+
+	// Create Moveables for each hand card
+	const handMoveables = handData.map(
+		(_, i) => new Moveable(0, 0, HAND_CARD_W, HAND_CARD_H)
+	);
+
+	function toggleCard(index: number) {
+		const m = handMoveables[index];
+		m.highlighted = !m.highlighted;
+	}
+
+	// Count selected for display
+	let selectedCount = $derived(handMoveables.filter((m) => m.highlighted).length);
 </script>
 
 <div class="p-6">
 	<div class="mb-6">
 		<h1 class="text-2xl font-bold tracking-tight">Balatro Card</h1>
 		<p class="text-sm text-muted-foreground">
-			GPU-rendered card effects with Threlte (Three.js). Hover for tilt parallax, shader-based
-			editions.
+			Balatro's exact presentation system: T/VT dual transforms, exponential damping, juice
+			animations, hand fan layout with sine bob.
 		</p>
 	</div>
 
@@ -53,7 +64,7 @@
 			<div class="flex flex-wrap items-end justify-center gap-8 py-4">
 				{#each editions as edition, i}
 					<div class="flex flex-col items-center gap-3">
-						<BalatroCard rank="A" suit="spades" {edition} width={cardWidth} {useSprites} cardIndex={i} />
+						<BalatroCard rank="A" suit="spades" {edition} width={cardWidth} cardIndex={i} />
 						<Badge variant={edition === 'base' ? 'outline' : 'default'}>
 							{edition}
 						</Badge>
@@ -78,14 +89,12 @@
 						suit={selectedSuit}
 						edition={selectedEdition}
 						width={cardWidth}
-						{useSprites}
 						cardIndex={10}
 					/>
 				</div>
 
 				<!-- Controls -->
 				<div class="flex-1 space-y-4">
-					<!-- Edition -->
 					<div>
 						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
 							Edition
@@ -103,7 +112,6 @@
 						</div>
 					</div>
 
-					<!-- Suit -->
 					<div>
 						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
 							Suit
@@ -121,7 +129,6 @@
 						</div>
 					</div>
 
-					<!-- Rank -->
 					<div>
 						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
 							Rank
@@ -140,15 +147,6 @@
 						</div>
 					</div>
 
-					<!-- Sprites -->
-					<div>
-						<label class="flex items-center gap-2 text-sm">
-							<input type="checkbox" bind:checked={useSprites} />
-							Use sprites
-						</label>
-					</div>
-
-					<!-- Size -->
 					<div>
 						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
 							Card Width
@@ -163,37 +161,88 @@
 		</Card.Content>
 	</Card.Root>
 
-	<!-- Hand demo -->
+	<!-- Hand demo with CardArea + CRT -->
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="text-sm">Hand</Card.Title>
-			<Card.Description>Click cards to select. Shows hover tilt + selection state.</Card.Description>
+			<Card.Description
+				>Balatro's hand layout with exponential-damped movement. Click to select, drag to
+				reorder.</Card.Description
+			>
 		</Card.Header>
 		<Card.Content>
-			<div class="card-hand flex items-end justify-center pb-10 pt-6">
-				{#each hand as card, i}
-					{@const count = hand.length}
-					{@const normalizedPos = count <= 1 ? 0 : (i - (count - 1) / 2) / ((count - 1) / 2)}
-					{@const yOffset = normalizedPos * normalizedPos * 20}
-					{@const zRotation = normalizedPos * -3}
-					<div class="card-in-hand" style="transform: translateY({yOffset}px) rotate({zRotation}deg);">
-						<BalatroCard
-							rank={card.rank}
-							suit={card.suit}
-							edition={card.edition}
-							width={130}
-							{useSprites}
-							cardIndex={i}
-							selected={selectedCards.has(i)}
-							onclick={() => toggleCard(i)}
-						/>
+			<div class="mb-3 flex items-center gap-4">
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" bind:checked={crtEnabled} />
+					CRT Effect
+				</label>
+				{#if crtEnabled}
+					<div class="flex items-center gap-2">
+						<span class="text-xs text-muted-foreground">Intensity</span>
+						<input type="range" min="0" max="100" bind:value={crtIntensity} class="w-24" />
+						<span class="w-8 text-right text-xs text-muted-foreground">{crtIntensity}%</span>
 					</div>
-				{/each}
+				{/if}
 			</div>
-			{#if selectedCards.size > 0}
+			{#if crtEnabled}
+				<CrtOverlay intensity={crtIntensity}>
+					<div class="flex justify-center pb-4 pt-6">
+						<CardArea
+							type="hand"
+							cards={handMoveables}
+							areaWidth={HAND_AREA_W}
+							areaHeight={HAND_AREA_H}
+							cardW={HAND_CARD_W}
+							cardH={HAND_CARD_H}
+						>
+							{#each handData as card, i}
+								<BalatroCard
+									rank={card.rank}
+									suit={card.suit}
+									edition={card.edition}
+									width={HAND_CARD_W}
+									cardIndex={i}
+									moveable={handMoveables[i]}
+									selected={handMoveables[i].highlighted}
+									onclick={() => toggleCard(i)}
+								/>
+							{/each}
+						</CardArea>
+					</div>
+				</CrtOverlay>
+			{:else}
+				<div class="flex justify-center pb-4 pt-6">
+					<CardArea
+						type="hand"
+						cards={handMoveables}
+						areaWidth={HAND_AREA_W}
+						areaHeight={HAND_AREA_H}
+						cardW={HAND_CARD_W}
+						cardH={HAND_CARD_H}
+					>
+						{#each handData as card, i}
+							<BalatroCard
+								rank={card.rank}
+								suit={card.suit}
+								edition={card.edition}
+								width={HAND_CARD_W}
+								cardIndex={i}
+								moveable={handMoveables[i]}
+								selected={handMoveables[i].highlighted}
+								onclick={() => toggleCard(i)}
+							/>
+						{/each}
+					</CardArea>
+				</div>
+			{/if}
+			{#if selectedCount > 0}
 				<div class="mt-4 flex items-center justify-center gap-2">
-					<Badge variant="secondary">{selectedCards.size} selected</Badge>
-					<Button variant="outline" size="sm" onclick={() => (selectedCards = new Set())}>
+					<Badge variant="secondary">{selectedCount} selected</Badge>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => handMoveables.forEach((m) => (m.highlighted = false))}
+					>
 						Clear
 					</Button>
 				</div>
@@ -201,31 +250,3 @@
 		</Card.Content>
 	</Card.Root>
 </div>
-
-<style>
-	.card-in-hand {
-		margin: 0 -15px;
-		transition: margin 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-			transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-
-	/* When hovering the hand area, spread all cards a bit */
-	.card-hand:hover .card-in-hand {
-		margin: 0 2px;
-	}
-
-	/* The hovered card gets more space */
-	.card-in-hand:hover {
-		margin: 0 20px;
-	}
-
-	/* Adjacent siblings of hovered card get medium space */
-	.card-in-hand:hover + .card-in-hand {
-		margin: 0 8px;
-	}
-
-	/* Card before hovered (using has — next sibling is hovered) */
-	.card-in-hand:has(+ .card-in-hand:hover) {
-		margin: 0 8px;
-	}
-</style>

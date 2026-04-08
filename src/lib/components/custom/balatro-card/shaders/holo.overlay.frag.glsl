@@ -1,5 +1,5 @@
-// Balatro polychrome rainbow pattern — overlay version (no card texture)
-// Produces HSL rainbow field on transparent background for CSS compositing
+// Balatro holo rainbow grid pattern — overlay version (no card texture)
+// Produces holographic grid + rainbow on transparent background for CSS compositing
 
 uniform float time;
 uniform vec2 mouse;
@@ -30,12 +30,11 @@ void main()
 {
     vec2 uv = (((vUv)*(image_details)) - texture_details.xy*texture_details.ba)/texture_details.ba;
 
-    // polychrome vec2: .x = phase, .y = time offset
-    vec2 polychrome = vec2(time + mouse.x, mouse.y);
+    vec2 holo = edition_params;
 
-    float t = polychrome.y*2.221 + time;
+    float t = holo.y*7.221 + time;
     vec2 floored_uv = (floor((uv*texture_details.ba)))/texture_details.ba;
-    vec2 uv_scaled_centered = (floored_uv - 0.5) * 50.;
+    vec2 uv_scaled_centered = (floored_uv - 0.5) * 250.;
 
     vec2 field_part1 = uv_scaled_centered + 50.*vec2(sin(-t / 143.6340), cos(-t / 99.4324));
     vec2 field_part2 = uv_scaled_centered + 50.*vec2(cos( t / 53.1532),  cos( t / 61.4532));
@@ -45,11 +44,17 @@ void main()
         cos(length(field_part1) / 19.483) + sin(length(field_part2) / 33.155) * cos(field_part2.y / 15.73) +
         cos(length(field_part3) / 27.193) * sin(field_part3.x / 21.92) ))/2.;
 
-    float res = (.5 + .5* cos( (polychrome.x) * 2.612 + ( field + -.5 ) *3.14));
+    float res = (.5 + .5* cos( (holo.x) * 2.612 + ( field + -.5 ) *3.14));
 
-    // Generate rainbow color from the Perlin field using HSL
-    vec4 hsl = vec4(res + polychrome.y*0.04, 0.6, 0.5, 0.7);
-    vec3 rgb = RGB(hsl).rgb;
+    // Diamond grid pattern (exact Balatro gridsize=0.79)
+    float gridsize = 0.79;
+    float fac = 0.5*max(max(max(0., 7.*abs(cos(uv.x*gridsize*20.))-6.),max(0., 7.*cos(uv.y*gridsize*45. + uv.x*gridsize*20.)-6.)), max(0., 7.*cos(uv.y*gridsize*45. - uv.x*gridsize*20.)-6.));
 
-    gl_FragColor = vec4(rgb, 0.7);
+    // Generate holographic rainbow from Perlin field + grid
+    vec4 hsl = vec4(res + fac, 0.8, 0.55, 1.0);
+    vec3 rgb = RGB(hsl).rgb * vec3(0.9, 0.8, 1.2);
+
+    float alpha = 0.5 + 0.2 * fac;
+
+    gl_FragColor = vec4(rgb, alpha);
 }

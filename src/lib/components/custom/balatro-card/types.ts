@@ -1,4 +1,6 @@
-export type CardEdition = 'base' | 'foil' | 'polychrome' | 'negative';
+export type { Transform } from './moveable.svelte.js';
+
+export type CardEdition = 'base' | 'foil' | 'polychrome' | 'negative' | 'holo' | 'negative_shine';
 
 export type CardSuit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
 
@@ -25,7 +27,6 @@ export type BalatroCardProps = {
 	selected?: boolean;
 	disabled?: boolean;
 	played?: boolean;
-	useSprites?: boolean;
 	cardIndex?: number;
 	onclick?: () => void;
 	class?: string;
