@@ -28,6 +28,7 @@ export type BalatroCardProps = {
 	disabled?: boolean;
 	played?: boolean;
 	cardIndex?: number;
+	jokerPos?: { col: number; row: number }; // If set, renders a joker sprite instead of a playing card
 	onclick?: () => void;
 	class?: string;
 };

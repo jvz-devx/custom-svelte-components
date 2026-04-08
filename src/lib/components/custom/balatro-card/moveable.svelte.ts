@@ -17,7 +17,7 @@ export class Moveable implements Tickable {
 	pinch: { x: boolean };
 	hovering: boolean = $state(false);
 	dragging: boolean = $state(false);
-	highlighted: boolean;
+	highlighted: boolean = $state(false);
 	zoom: boolean;
 	ambientTilt: number;
 	shadowParallax: { x: number; y: number };
@@ -39,6 +39,9 @@ export class Moveable implements Tickable {
 
 	tiltVar: { mx: number; my: number; dx: number; dy: number; amt: number };
 
+	/** Generic data attached to this moveable (e.g. card rank/suit/edition) */
+	data: Record<string, any>;
+
 	roomW: number;
 	roomH: number;
 	coordinateScale: number;
@@ -48,7 +51,6 @@ export class Moveable implements Tickable {
 		this.VT = { x, y, w, h, r: 0, scale: 0.95 };
 		this.velocity = { x: 0, y: 0, r: 0, scale: 0 };
 		this.pinch = { x: false };
-		this.highlighted = false;
 		this.zoom = true;
 		this.ambientTilt = 0.2;
 		this.shadowParallax = { x: 0, y: -1.5 };
@@ -58,6 +60,7 @@ export class Moveable implements Tickable {
 		this.facing = 'front';
 		this.spriteFacing = 'front';
 		this.tiltVar = { mx: 0, my: 0, dx: 0, dy: 0, amt: 0 };
+		this.data = {};
 		this.roomW = 800;
 		this.roomH = 600;
 		this.coordinateScale = 1;

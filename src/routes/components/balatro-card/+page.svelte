@@ -1,252 +1,302 @@
 <script lang="ts">
-	import { BalatroCard, CardArea, CrtOverlay } from '$lib/components/custom/balatro-card/index.js';
+	import { BalatroCard, CardArea, CrtOverlay, BalatroBackground } from '$lib/components/custom/balatro-card/index.js';
 	import { Moveable } from '$lib/components/custom/balatro-card/moveable.svelte.js';
 	import type { CardEdition, CardRank, CardSuit } from '$lib/components/custom/balatro-card/types.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
 
-	const editions: CardEdition[] = ['base', 'foil', 'polychrome', 'negative', 'holo'];
-	const suits: CardSuit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
-	const ranks: CardRank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-
-	let selectedEdition = $state<CardEdition>('foil');
-	let selectedSuit = $state<CardSuit>('spades');
-	let selectedRank = $state<CardRank>('A');
-	let cardWidth = $state(150);
-	let crtEnabled = $state(true);
-	let crtIntensity = $state(100);
-
-	// Hand demo — Moveable-based
-	const HAND_CARD_W = 130;
-	const HAND_CARD_H = Math.round(HAND_CARD_W * (47 / 35));
+	const CARD_W = 110;
+	const CARD_H = Math.round(CARD_W * (47 / 35));
 	const HAND_AREA_W = 800;
-	const HAND_AREA_H = 300;
+	const HAND_AREA_H = 260;
+	const PLAY_AREA_W = 600;
+	const PLAY_AREA_H = 200;
+	const JOKER_AREA_W = 600;
+	const JOKER_AREA_H = 200;
 
-	const handData: { rank: CardRank; suit: CardSuit; edition: CardEdition }[] = [
-		{ rank: 'A', suit: 'spades', edition: 'foil' },
-		{ rank: 'K', suit: 'hearts', edition: 'polychrome' },
-		{ rank: 'Q', suit: 'diamonds', edition: 'negative' },
-		{ rank: 'J', suit: 'clubs', edition: 'base' },
-		{ rank: '10', suit: 'spades', edition: 'foil' }
-	];
+	const RANKS: CardRank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+	const SUITS: CardSuit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
+	const EDITIONS: CardEdition[] = ['base', 'base', 'base', 'base', 'foil', 'polychrome', 'negative', 'holo'];
 
-	// Create Moveables for each hand card
-	const handMoveables = handData.map(
-		(_, i) => new Moveable(0, 0, HAND_CARD_W, HAND_CARD_H)
-	);
-
-	function toggleCard(index: number) {
-		const m = handMoveables[index];
-		m.highlighted = !m.highlighted;
+	// Card data is stored ON the Moveable via .data so that when CardArea sorts
+	// the Moveables array (for drag reordering), the card data moves with it.
+	function makeHandCard(): Moveable {
+		const m = new Moveable(0, 0, CARD_W, CARD_H);
+		m.data = {
+			rank: RANKS[Math.floor(Math.random() * RANKS.length)],
+			suit: SUITS[Math.floor(Math.random() * SUITS.length)],
+			edition: EDITIONS[Math.floor(Math.random() * EDITIONS.length)],
+		};
+		return m;
 	}
 
-	// Count selected for display
-	let selectedCount = $derived(handMoveables.filter((m) => m.highlighted).length);
+	// Theme & CRT state
+	let theme = $state<'balatro' | 'shadcn'>('balatro');
+	let crtEnabled = $state(true);
+	const isBalatro = $derived(theme === 'balatro');
+
+	// Hand: single array of Moveables (card data lives in .data)
+	let hand = $state<Moveable[]>(Array.from({ length: 8 }, makeHandCard));
+
+	// Play area
+	let playArea = $state<Moveable[]>([]);
+
+	// Jokers
+	const jokerDefs = [
+		{ col: 0, row: 0, edition: 'foil' as CardEdition },
+		{ col: 1, row: 0, edition: 'holo' as CardEdition },
+		{ col: 2, row: 0, edition: 'polychrome' as CardEdition },
+		{ col: 3, row: 0, edition: 'base' as CardEdition },
+		{ col: 7, row: 0, edition: 'negative' as CardEdition },
+	];
+	let jokers = $state<Moveable[]>(jokerDefs.map((j) => {
+		const m = new Moveable(0, 0, CARD_W, CARD_H);
+		m.data = j;
+		return m;
+	}));
+
+	let selectedCount = $derived(hand.filter((m) => m.highlighted).length);
+
+	function playHand() {
+		const selected = hand.filter((m) => m.highlighted);
+		if (selected.length === 0) return;
+		// Create new Moveables for play area (fresh physics state)
+		const played = selected.map((m) => {
+			const p = new Moveable(0, 0, CARD_W, CARD_H);
+			p.data = { ...m.data };
+			return p;
+		});
+		playArea = [...playArea, ...played];
+		hand = hand.filter((m) => !m.highlighted);
+	}
+
+	function discardSelected() {
+		hand = hand.filter((m) => !m.highlighted);
+	}
+
+	function drawCards() {
+		const drawCount = Math.min(8 - hand.length, 3);
+		if (drawCount <= 0) return;
+		const newCards = Array.from({ length: drawCount }, makeHandCard);
+		hand = [...hand, ...newCards];
+	}
+
+	function clearPlayArea() {
+		playArea = [];
+	}
 </script>
 
-<div class="p-6">
-	<div class="mb-6">
-		<h1 class="text-2xl font-bold tracking-tight">Balatro Card</h1>
-		<p class="text-sm text-muted-foreground">
-			Balatro's exact presentation system: T/VT dual transforms, exponential damping, juice
-			animations, hand fan layout with sine bob.
-		</p>
+<div
+	class="relative min-h-screen transition-colors duration-300"
+	class:bg-background={!isBalatro}
+>
+	{#if isBalatro}
+		<BalatroBackground />
+	{/if}
+	<!-- Top bar -->
+	<div
+		class="relative z-10 flex items-center justify-between border-b px-6 py-3 {isBalatro ? 'border-white/10' : 'border-border'}"
+	>
+		<h1
+			class="text-xl font-bold tracking-tight"
+			class:text-white={isBalatro}
+			class:text-foreground={!isBalatro}
+		>
+			Balatro Card Demo
+		</h1>
+		<div class="flex items-center gap-2">
+			{#if isBalatro}
+				<button
+					class="rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white/90 backdrop-blur transition-colors hover:bg-white/20"
+					onclick={() => (theme = 'shadcn')}
+				>
+					Theme: Balatro
+				</button>
+				<button
+					class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors {crtEnabled
+						? 'bg-amber-600 text-white'
+						: 'bg-white/10 text-white/90'} hover:bg-amber-500"
+					onclick={() => (crtEnabled = !crtEnabled)}
+				>
+					CRT {crtEnabled ? 'ON' : 'OFF'}
+				</button>
+			{:else}
+				<Button variant="outline" size="sm" onclick={() => (theme = 'balatro')}>
+					Theme: shadcn
+				</Button>
+				<Button
+					variant={crtEnabled ? 'default' : 'outline'}
+					size="sm"
+					onclick={() => (crtEnabled = !crtEnabled)}
+				>
+					CRT {crtEnabled ? 'ON' : 'OFF'}
+				</Button>
+			{/if}
+		</div>
 	</div>
 
-	<!-- Edition showcase -->
-	<Card.Root class="mb-6">
-		<Card.Header>
-			<Card.Title class="text-sm">Editions</Card.Title>
-			<Card.Description>Each edition applies a different GLSL fragment shader.</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<div class="flex flex-wrap items-end justify-center gap-8 py-4">
-				{#each editions as edition, i}
-					<div class="flex flex-col items-center gap-3">
-						<BalatroCard rank="A" suit="spades" {edition} width={cardWidth} cardIndex={i} />
-						<Badge variant={edition === 'base' ? 'outline' : 'default'}>
-							{edition}
-						</Badge>
-					</div>
-				{/each}
+	<!-- Game area -->
+	{#snippet content()}
+		<div class="relative z-10 mx-auto flex max-w-[900px] flex-col items-center gap-4 px-6 py-6">
+			<!-- Joker bar -->
+			<div class="flex flex-col items-center gap-1">
+				<span
+					class="text-xs font-semibold uppercase tracking-widest {isBalatro ? 'text-white/40' : 'text-muted-foreground'}"
+				>
+					Jokers
+				</span>
+				<CardArea
+					type="joker"
+					cards={jokers}
+					areaWidth={JOKER_AREA_W}
+					areaHeight={JOKER_AREA_H}
+					cardW={CARD_W}
+					cardH={CARD_H}
+				>
+					{#each jokers as j, i}
+						<BalatroCard
+							jokerPos={{ col: j.data.col, row: j.data.row }}
+							edition={j.data.edition}
+							width={CARD_W}
+							cardIndex={i + 100}
+							moveable={j}
+						/>
+					{/each}
+				</CardArea>
 			</div>
-		</Card.Content>
-	</Card.Root>
 
-	<!-- Interactive config -->
-	<Card.Root class="mb-6">
-		<Card.Header>
-			<Card.Title class="text-sm">Playground</Card.Title>
-			<Card.Description>Configure a single card.</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<div class="flex flex-wrap gap-8">
-				<!-- Card preview -->
-				<div class="flex items-center justify-center">
-					<BalatroCard
-						rank={selectedRank}
-						suit={selectedSuit}
-						edition={selectedEdition}
-						width={cardWidth}
-						cardIndex={10}
-					/>
-				</div>
-
-				<!-- Controls -->
-				<div class="flex-1 space-y-4">
-					<div>
-						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-							Edition
-						</p>
-						<div class="flex flex-wrap gap-1">
-							{#each editions as ed}
-								<Button
-									variant={selectedEdition === ed ? 'default' : 'outline'}
-									size="sm"
-									onclick={() => (selectedEdition = ed)}
-								>
-									{ed}
-								</Button>
-							{/each}
-						</div>
-					</div>
-
-					<div>
-						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-							Suit
-						</p>
-						<div class="flex flex-wrap gap-1">
-							{#each suits as s}
-								<Button
-									variant={selectedSuit === s ? 'default' : 'outline'}
-									size="sm"
-									onclick={() => (selectedSuit = s)}
-								>
-									{s}
-								</Button>
-							{/each}
-						</div>
-					</div>
-
-					<div>
-						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-							Rank
-						</p>
-						<div class="flex flex-wrap gap-1">
-							{#each ranks as r}
-								<Button
-									variant={selectedRank === r ? 'default' : 'outline'}
-									size="sm"
-									onclick={() => (selectedRank = r)}
-									class="w-10"
-								>
-									{r}
-								</Button>
-							{/each}
-						</div>
-					</div>
-
-					<div>
-						<p class="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-							Card Width
-						</p>
-						<div class="flex items-center gap-3">
-							<input type="range" min="80" max="250" bind:value={cardWidth} class="flex-1" />
-							<span class="w-14 text-right text-xs text-muted-foreground">{cardWidth}px</span>
-						</div>
-					</div>
-				</div>
-			</div>
-		</Card.Content>
-	</Card.Root>
-
-	<!-- Hand demo with CardArea + CRT -->
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-sm">Hand</Card.Title>
-			<Card.Description
-				>Balatro's hand layout with exponential-damped movement. Click to select, drag to
-				reorder.</Card.Description
-			>
-		</Card.Header>
-		<Card.Content>
-			<div class="mb-3 flex items-center gap-4">
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" bind:checked={crtEnabled} />
-					CRT Effect
-				</label>
-				{#if crtEnabled}
-					<div class="flex items-center gap-2">
-						<span class="text-xs text-muted-foreground">Intensity</span>
-						<input type="range" min="0" max="100" bind:value={crtIntensity} class="w-24" />
-						<span class="w-8 text-right text-xs text-muted-foreground">{crtIntensity}%</span>
-					</div>
-				{/if}
-			</div>
-			{#if crtEnabled}
-				<CrtOverlay intensity={crtIntensity}>
-					<div class="flex justify-center pb-4 pt-6">
-						<CardArea
-							type="hand"
-							cards={handMoveables}
-							areaWidth={HAND_AREA_W}
-							areaHeight={HAND_AREA_H}
-							cardW={HAND_CARD_W}
-							cardH={HAND_CARD_H}
-						>
-							{#each handData as card, i}
-								<BalatroCard
-									rank={card.rank}
-									suit={card.suit}
-									edition={card.edition}
-									width={HAND_CARD_W}
-									cardIndex={i}
-									moveable={handMoveables[i]}
-									selected={handMoveables[i].highlighted}
-									onclick={() => toggleCard(i)}
-								/>
-							{/each}
-						</CardArea>
-					</div>
-				</CrtOverlay>
-			{:else}
-				<div class="flex justify-center pb-4 pt-6">
+			<!-- Play area -->
+			<div class="flex flex-col items-center gap-1">
+				<span
+					class="text-xs font-semibold uppercase tracking-widest {isBalatro ? 'text-white/40' : 'text-muted-foreground'}"
+				>
+					Played
+				</span>
+				{#if playArea.length > 0}
 					<CardArea
-						type="hand"
-						cards={handMoveables}
-						areaWidth={HAND_AREA_W}
-						areaHeight={HAND_AREA_H}
-						cardW={HAND_CARD_W}
-						cardH={HAND_CARD_H}
+						type="play"
+						cards={playArea}
+						areaWidth={PLAY_AREA_W}
+						areaHeight={PLAY_AREA_H}
+						cardW={CARD_W}
+						cardH={CARD_H}
 					>
-						{#each handData as card, i}
+						{#each playArea as p, i}
 							<BalatroCard
-								rank={card.rank}
-								suit={card.suit}
-								edition={card.edition}
-								width={HAND_CARD_W}
-								cardIndex={i}
-								moveable={handMoveables[i]}
-								selected={handMoveables[i].highlighted}
-								onclick={() => toggleCard(i)}
+								rank={p.data.rank}
+								suit={p.data.suit}
+								edition={p.data.edition}
+								width={CARD_W}
+								cardIndex={i + 200}
+								moveable={p}
 							/>
 						{/each}
 					</CardArea>
-				</div>
-			{/if}
-			{#if selectedCount > 0}
-				<div class="mt-4 flex items-center justify-center gap-2">
-					<Badge variant="secondary">{selectedCount} selected</Badge>
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => handMoveables.forEach((m) => (m.highlighted = false))}
+				{:else}
+					<div
+						class="flex items-center justify-center rounded-xl border-2 border-dashed {isBalatro ? 'border-white/10' : 'border-border'}"
+						style="width: {PLAY_AREA_W}px; height: {PLAY_AREA_H}px;"
 					>
-						Clear
-					</Button>
-				</div>
-			{/if}
-		</Card.Content>
-	</Card.Root>
+						<span
+							class="text-sm {isBalatro ? 'text-white/20' : 'text-muted-foreground'}"
+						>
+							Select cards and play
+						</span>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Action buttons -->
+			<div class="flex items-center gap-3">
+				{#if isBalatro}
+					<button
+						class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-lg transition-transform hover:bg-blue-600 active:scale-95 disabled:opacity-40"
+						onclick={playHand}
+						disabled={selectedCount === 0}
+					>
+						Play Hand
+					</button>
+					<button
+						class="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white shadow-lg transition-transform hover:bg-red-600 active:scale-95 disabled:opacity-40"
+						onclick={discardSelected}
+						disabled={selectedCount === 0}
+					>
+						Discard
+					</button>
+					<button
+						class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-lg transition-transform hover:bg-emerald-600 active:scale-95 disabled:opacity-40"
+						onclick={drawCards}
+						disabled={hand.length >= 8}
+					>
+						Draw
+					</button>
+					{#if playArea.length > 0}
+						<button
+							class="rounded-lg bg-white/10 px-4 py-2 text-sm font-bold text-white/80 shadow-lg transition-transform hover:bg-white/20 active:scale-95"
+							onclick={clearPlayArea}
+						>
+							Clear
+						</button>
+					{/if}
+				{:else}
+					<Button onclick={playHand} disabled={selectedCount === 0}>Play Hand</Button>
+					<Button variant="destructive" onclick={discardSelected} disabled={selectedCount === 0}>Discard</Button>
+					<Button variant="secondary" onclick={drawCards} disabled={hand.length >= 8}>Draw</Button>
+					{#if playArea.length > 0}
+						<Button variant="outline" onclick={clearPlayArea}>Clear</Button>
+					{/if}
+				{/if}
+			</div>
+
+			<!-- Hand -->
+			<div class="flex flex-col items-center gap-1">
+				<span
+					class="text-xs font-semibold uppercase tracking-widest {isBalatro ? 'text-white/40' : 'text-muted-foreground'}"
+				>
+					Hand ({hand.length}/8)
+				</span>
+				{#if hand.length > 0}
+					<CardArea
+						type="hand"
+						cards={hand}
+						areaWidth={HAND_AREA_W}
+						areaHeight={HAND_AREA_H}
+						cardW={CARD_W}
+						cardH={CARD_H}
+						maxCards={8}
+					>
+						{#each hand as m, i}
+							<BalatroCard
+								rank={m.data.rank}
+								suit={m.data.suit}
+								edition={m.data.edition}
+								width={CARD_W}
+								cardIndex={i}
+								moveable={m}
+								selected={m.highlighted}
+							/>
+						{/each}
+					</CardArea>
+				{:else}
+					<div
+						class="flex items-center justify-center rounded-xl border-2 border-dashed {isBalatro ? 'border-white/10' : 'border-border'}"
+						style="width: {HAND_AREA_W}px; height: {HAND_AREA_H}px;"
+					>
+						<span
+							class="text-sm {isBalatro ? 'text-white/20' : 'text-muted-foreground'}"
+						>
+							Click Draw to get cards
+						</span>
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/snippet}
+
+	{#if crtEnabled}
+		<CrtOverlay>
+			{@render content()}
+		</CrtOverlay>
+	{:else}
+		{@render content()}
+	{/if}
 </div>

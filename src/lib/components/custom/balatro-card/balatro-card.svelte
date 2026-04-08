@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { cn } from '$lib/utils.js';
-	import { renderSpriteCard, getCardSpriteRegion, NATIVE_CARD_W, NATIVE_CARD_H } from './sprite-atlas.js';
+	import { renderSpriteCard, renderJokerSprite, getCardSpriteRegion, NATIVE_CARD_W, NATIVE_CARD_H } from './sprite-atlas.js';
 	import { renderShaderCard, renderShaderOverlay, renderDissolveCard, invalidateTexture, type ShaderUniforms, type DissolveUniforms } from './shader-renderer.js';
 	import { Moveable } from './moveable.svelte.js';
 	import { addApplyCallback, removeApplyCallback, getTime } from './animation-loop.js';
@@ -16,6 +16,7 @@
 		disabled = false,
 		played = false,
 		cardIndex = 0,
+		jokerPos,
 		moveable: externalMoveable,
 		onclick,
 		class: className
@@ -44,13 +45,8 @@
 	let flashEl = $state<HTMLDivElement | null>(null);
 	let flashOpacity = 0;
 
-	function handleClick() {
-		onclick?.();
-		// Flash effect
-		flashOpacity = 0.4;
-		// Juice on click
-		mov.juiceUp(0.05, 0.03);
-	}
+	// Click/selection is handled by CardArea's unified pointer system.
+	// No onclick handler on the card itself — avoids conflict with drag detection.
 
 	// --- Pointer events for hover/tilt ---
 	function onPointerEnter() {
@@ -92,17 +88,25 @@
 		if (typeof document === 'undefined') return;
 		// Render at native Balatro resolution (71x95) — shaders operate at this size
 		// for the characteristic chunky pixel-art look. Displayed upscaled via CSS.
-		const r = rank, s = suit;
-		renderSpriteCard(r, s, NATIVE_CARD_W, NATIVE_CARD_H).then((c) => {
-			cardCanvas = c;
-		});
+		if (jokerPos) {
+			renderJokerSprite(jokerPos.col, jokerPos.row, NATIVE_CARD_W, NATIVE_CARD_H).then((c) => {
+				cardCanvas = c;
+			});
+		} else {
+			const r = rank, s = suit;
+			renderSpriteCard(r, s, NATIVE_CARD_W, NATIVE_CARD_H).then((c) => {
+				cardCanvas = c;
+			});
+		}
 	});
 
-	// All edition shaders modify the card texture in-place (full shader pass)
-	// Balatro draws foil/polychrome/holo/negative as shader passes that modify the card texture directly
-	const isShaderEdition = $derived(edition === 'foil' || edition === 'polychrome' || edition === 'negative' || edition === 'holo');
-	// No overlay editions — all are in-place modifications (kept for template guard)
-	const isOverlayEdition = false;
+	// Negative: full replacement shader (only edition that completely replaces the card texture)
+	const isReplacementEdition = $derived(edition === 'negative');
+	// Foil/polychrome/holo: rendered as ADDITIONAL shader pass on top of base card.
+	// In Balatro, these are drawn via Love2D's framebuffer compositing — the shader
+	// intentionally reduces alpha (tex.a = 0.3*tex.a + ...) because it blends ON TOP
+	// of the already-rendered card. We render base card first, then overlay the edition.
+	const isOverlayEdition = $derived(edition === 'foil' || edition === 'polychrome' || edition === 'holo');
 	// Negative edition gets an additional negative_shine overlay (drawn on top in Balatro)
 	const hasNegativeShine = $derived(edition === 'negative');
 
@@ -181,7 +185,7 @@
 			invalidateTexture(canvas);
 		});
 
-		if (!isShaderEdition) {
+		if (!isReplacementEdition) {
 			// Base card: render through dissolve shader (identity pass, hover bulge active)
 			const staticResult = untrack(() => renderDissolveCard(canvas, cardTimeSeed, 0, 0, getDissolveUniforms()));
 			if (staticResult) baseImgEl.src = staticResult;
@@ -207,19 +211,15 @@
 		}
 
 		// Edition shader: foil/polychrome/negative/holo — modifies card texture in-place
-		// Uses dissolve uniforms (with mouse position) for hover bulge vertex effect
-		const dissolveUnis = getDissolveUniforms();
-		const staticResult = untrack(() => renderShaderCard(canvas, ed, cardTimeSeed, 0, 0, cardTimeSeed, dissolveUnis));
-		if (staticResult) {
-			baseImgEl.src = staticResult;
-		} else {
-			baseImgEl.src = canvas.toDataURL();
-		}
-
-		if (!hovering) return;
-
+		// Always animate: edition_params changes every frame from ambient tilt orbit,
+		// creating the subtle idle shimmer that Balatro cards have even without hovering.
 		let running = true;
 		let lastTime = performance.now();
+
+		// Initial render
+		const staticResult = untrack(() => renderShaderCard(canvas, ed, cardTimeSeed, 0, 0, cardTimeSeed, getDissolveUniforms()));
+		if (staticResult) baseImgEl.src = staticResult;
+		else baseImgEl.src = canvas.toDataURL();
 
 		function frame() {
 			if (!running || !canvas || !baseImgEl) return;
@@ -243,25 +243,22 @@
 
 		if (!canvas || !isOverlayEdition || !overlayImgEl) return;
 
-		const w = canvas.width;
-		const h = canvas.height;
-		const overlayEd = ed as 'foil' | 'polychrome' | 'holo';
-
-		// Render overlay pattern
-		const staticResult = untrack(() => renderShaderOverlay(overlayEd, w, h, cardTimeSeed, 0, 0, cardTimeSeed, getShaderUniforms()));
-		if (staticResult) overlayImgEl.src = staticResult;
-
-		if (!hovering) return;
-
+		// Edition overlay: render the card through the edition shader.
+		// The shader reduces alpha intentionally (foil: tex.a = 0.3*tex.a + shimmer),
+		// which composites correctly as an overlay on top of the base card art.
+		// Always animate for ambient tilt shimmer.
 		let running = true;
 		let lastTime = performance.now();
 
+		const staticResult = untrack(() => renderShaderCard(canvas, ed, cardTimeSeed, 0, 0, cardTimeSeed, getDissolveUniforms()));
+		if (staticResult) overlayImgEl.src = staticResult;
+
 		function frame() {
-			if (!running || !overlayImgEl) return;
+			if (!running || !canvas || !overlayImgEl) return;
 			const now = performance.now();
 			animTime += (now - lastTime) / 1000;
 			lastTime = now;
-			const result = renderShaderOverlay(overlayEd, w, h, cardTimeSeed, tiltMx, tiltMy, cardTimeSeed, getShaderUniforms());
+			const result = renderShaderCard(canvas, ed, cardTimeSeed, tiltMx, tiltMy, cardTimeSeed, getDissolveUniforms());
 			if (result) overlayImgEl.src = result;
 			overlayAnimFrame = requestAnimationFrame(frame);
 		}
@@ -387,9 +384,7 @@
 	onpointerenter={onPointerEnter}
 	onpointerleave={onPointerLeave}
 	onpointermove={onPointerMove}
-	onclick={handleClick}
-	onkeydown={(e) => e.key === 'Enter' && handleClick()}
-	role="button"
+	role="img"
 	tabindex={disabled ? -1 : 0}
 >
 	<!-- Layer 1: Base card art -->
@@ -401,13 +396,15 @@
 		draggable="false"
 	/>
 
-	<!-- Layer 2: Edition overlay (foil/polychrome/holo shimmer) -->
+	<!-- Layer 2: Edition overlay (foil/polychrome/holo — shader pass composited on top) -->
+	<!-- The shader itself controls alpha (e.g. foil: tex.a = 0.3*tex.a + shimmer). -->
+	<!-- Standard alpha compositing, no CSS blend mode needed. -->
 	{#if isOverlayEdition}
 		<img
 			bind:this={overlayImgEl}
 			alt=""
 			class="pointer-events-none absolute inset-0 h-full w-full"
-			style="border-radius: {width * 0.1}px; mix-blend-mode: {edition === 'foil' ? 'screen' : 'color'}; opacity: {edition === 'foil' ? 0.35 : 0.3};"
+			style="border-radius: {width * 0.1}px; image-rendering: pixelated;"
 			draggable="false"
 		/>
 	{/if}
@@ -479,14 +476,5 @@
 		style="border-radius: {width * 0.1}px; background: white; opacity: 0;"
 	></div>
 
-	<!-- Selection glow -->
-	{#if selected}
-		<div
-			class="pointer-events-none absolute -inset-1"
-			style="
-				box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.5);
-				border-radius: {width * 0.1 + 4}px;
-			"
-		></div>
-	{/if}
+	<!-- Selection: Balatro only raises the card (via HIGHLIGHT_H in CardArea layout). No glow. -->
 </div>

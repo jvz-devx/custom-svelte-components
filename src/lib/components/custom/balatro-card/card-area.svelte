@@ -12,6 +12,8 @@
 		cardH: number;
 		maxCards?: number;
 		rotationFactor?: number;
+		highlightLimit?: number;
+		onCardClick?: (index: number) => void;
 		children?: Snippet;
 	};
 
@@ -24,28 +26,34 @@
 		cardH,
 		maxCards,
 		rotationFactor,
+		highlightLimit = 5,
+		onCardClick,
 		children
 	}: CardAreaProps = $props();
 
-	// Drag state
-	let dragIndex: number | null = $state(null);
-	let dragOffset = { x: 0, y: 0 };
+	// --- Balatro-style unified pointer system ---
+	// Distance threshold: < MIN_CLICK_DIST → click, >= → drag
+	const MIN_CLICK_DIST_PX = cardW * 0.45;
 
-	/**
-	 * Layout uses pixel coordinates directly.
-	 * The Balatro formulas are adapted: instead of game-unit T values,
-	 * we compute pixel positions for the card area.
-	 *
-	 * Key Balatro hand layout (cardarea.lua:450-464):
-	 *   rotation: 0.2 * (-count/2 - 0.5 + k) / count  (radians, small values)
-	 *   x: spread across area width
-	 *   y: centered + arc + sine bob + highlight lift
-	 */
+	let draggedCard: Moveable | null = $state(null);
+	let pointerState: {
+		card: Moveable;
+		startX: number;
+		startY: number;
+		clickOffsetX: number;
+		clickOffsetY: number;
+		isDragging: boolean;
+		pointerId: number;
+	} | null = $state(null);
+
+	// --- Layout ---
+	// Balatro frame order: align_cards (position + sort) → then drag() updates cursor position.
+	// The sort uses the PREVIOUS frame's drag position, not the current one.
+	// This prevents oscillation because there's a 1-frame lag before the sort "sees" the new position.
 	function alignCards() {
 		const count = cards.length;
 		if (count === 0) return;
 
-		// Scale physics velocity cap from Balatro game units (~2 unit card width) to pixel space
 		const coordScale = cardW / 2.0;
 		for (const card of cards) {
 			card.coordinateScale = coordScale;
@@ -53,16 +61,15 @@
 
 		const TIME = getTime();
 		const effectiveMax = maxCards ?? count;
-		const highlightH = 0.2 * cardH; // HIGHLIGHT_H = 0.2 * CARD_H
+		const highlightH = 0.2 * cardH;
 
 		if (type === 'hand') {
 			const rFactor = rotationFactor ?? 0.2;
 			for (let i = 0; i < count; i++) {
 				const card = cards[i];
 				if (card.dragging) continue;
-				const k = i + 1; // 1-indexed
+				const k = i + 1;
 
-				// X spread across area (cardarea.lua:456) — compute X first so sine can use it
 				const maxC = Math.max(count, effectiveMax);
 				card.T.x =
 					(areaWidth - cardW) *
@@ -70,25 +77,25 @@
 							(0.5 * (count - maxC)) / Math.max(maxC - 1, 1)) +
 					0.5 * (cardW - card.T.w);
 
-				// Rotation (cardarea.lua:454) — use card.T.x for position-coupled phase
 				card.T.r =
 					rFactor * (-count / 2 - 0.5 + k) / count +
 					0.02 * Math.sin(2 * TIME + card.T.x);
 
-				// Y position: centered + highlight + sine bob + arc (cardarea.lua:460)
 				const hH = card.highlighted ? highlightH : 0;
 				const arc = Math.abs(0.5 * (-count / 2 + k - 0.5) / count);
 				card.T.y =
 					areaHeight / 2 -
 					cardH / 2 -
 					hH +
-					3 * Math.sin(0.666 * TIME + card.T.x) + // sine bob — use card.T.x for position-coupled phase
+					3 * Math.sin(0.666 * TIME + card.T.x) +
 					arc * cardH * 0.5 -
-					cardH * 0.2; // offset: match Balatro's -0.2 (scaled to pixels)
+					cardH * 0.2;
 
-				// Shadow parallax nudge (cardarea.lua:461: card.T.x += parallax.x / 30)
 				card.T.x += card.shadowParallax.x / 30;
 			}
+			// Sort by center X every frame (Balatro: cardarea.lua:464)
+			// The dragged card's T.x is from LAST frame's pointer position,
+			// so this sort is stable (no same-frame feedback loop)
 			cards.sort((a, b) => a.T.x + a.T.w / 2 - (b.T.x + b.T.w / 2));
 		} else if (type === 'play' || type === 'shop') {
 			for (let i = 0; i < count; i++) {
@@ -115,7 +122,7 @@
 				if (card.dragging) continue;
 				const k = i + 1;
 
-				card.T.x = 0; // compute X first for sine phase
+				card.T.x = 0;
 				if (count > 2) {
 					card.T.x =
 						(areaWidth - cardW) * ((k - 1) / (count - 1)) +
@@ -145,57 +152,117 @@
 		}
 	}
 
-	// Run layout every frame for TIME-dependent sine terms
+	// alignCards runs in the apply phase (AFTER all Moveables tick).
+	// Drag position updates happen in onPointerMove (BETWEEN frames via browser events).
+	// This matches Balatro's order: align+sort first, then drag updates position for next frame.
 	$effect(() => {
-		// Initial layout
 		alignCards();
 		const cb = () => alignCards();
 		addApplyCallback(cb);
 		return () => removeApplyCallback(cb);
 	});
 
-	// --- Drag handling ---
-	function handlePointerDown(e: PointerEvent) {
-		// Find which card was clicked by checking positions
-		const areaRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		const clickX = e.clientX - areaRect.left;
-		const clickY = e.clientY - areaRect.top;
+	// --- Hit test ---
+	function hitTestCard(clientX: number, clientY: number, areaRect: DOMRect): Moveable | null {
+		const px = clientX - areaRect.left;
+		const py = clientY - areaRect.top;
 
-		// Check cards in reverse order (top card first)
 		for (let i = cards.length - 1; i >= 0; i--) {
 			const card = cards[i];
 			const cx = card.VT.x;
 			const cy = card.VT.y;
-			if (
-				clickX >= cx &&
-				clickX <= cx + card.VT.w &&
-				clickY >= cy &&
-				clickY <= cy + card.VT.h
-			) {
-				card.dragging = true;
-				dragIndex = i;
-				dragOffset.x = clickX - card.T.x;
-				dragOffset.y = clickY - card.T.y;
-				(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-				e.preventDefault();
-				break;
+			if (px >= cx && px <= cx + cardW && py >= cy && py <= cy + cardH) {
+				return card;
 			}
+		}
+		return null;
+	}
+
+	// --- Pointer handlers ---
+	function onPointerDown(e: PointerEvent) {
+		if (pointerState) return;
+		const areaEl = e.currentTarget as HTMLElement;
+		const areaRect = areaEl.getBoundingClientRect();
+		const card = hitTestCard(e.clientX, e.clientY, areaRect);
+		if (!card) return;
+
+		const localX = e.clientX - areaRect.left;
+		const localY = e.clientY - areaRect.top;
+
+		pointerState = {
+			card,
+			startX: e.clientX,
+			startY: e.clientY,
+			clickOffsetX: localX - card.T.x,
+			clickOffsetY: localY - card.T.y,
+			isDragging: false,
+			pointerId: e.pointerId,
+		};
+
+		areaEl.setPointerCapture(e.pointerId);
+		e.preventDefault();
+	}
+
+	function onPointerMove(e: PointerEvent) {
+		if (!pointerState) return;
+
+		const canDrag = type === 'hand' || type === 'joker';
+
+		if (!pointerState.isDragging && canDrag) {
+			const dx = e.clientX - pointerState.startX;
+			const dy = e.clientY - pointerState.startY;
+			if (Math.sqrt(dx * dx + dy * dy) >= MIN_CLICK_DIST_PX) {
+				pointerState.isDragging = true;
+				pointerState.card.dragging = true;
+				pointerState.card.hovering = false; // Clear hover state (pointer capture blocks pointerleave)
+				draggedCard = pointerState.card;
+			}
+		}
+
+		if (pointerState.isDragging) {
+			const areaRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+			// Update T.x/T.y to follow cursor.
+			// alignCards() already ran this frame (via addApplyCallback), so the sort
+			// won't see this new position until NEXT frame — preventing oscillation.
+			pointerState.card.T.x = e.clientX - areaRect.left - pointerState.clickOffsetX;
+			pointerState.card.T.y = e.clientY - areaRect.top - pointerState.clickOffsetY;
 		}
 	}
 
-	function handlePointerMove(e: PointerEvent) {
-		if (dragIndex === null) return;
-		const card = cards[dragIndex];
-		const areaRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		card.T.x = e.clientX - areaRect.left - dragOffset.x;
-		card.T.y = e.clientY - areaRect.top - dragOffset.y;
+	function onPointerUp(e: PointerEvent) {
+		if (!pointerState) return;
+
+		const card = pointerState.card;
+
+		if (pointerState.isDragging) {
+			card.dragging = false;
+			draggedCard = null;
+			// Card is already at the right array position (sorted during drag).
+			// alignCards() will recalculate its layout position from its new index next frame.
+		} else {
+			// CLICK: toggle highlight (Balatro: card.lua:4610-4623)
+			if (card.highlighted) {
+				card.highlighted = false;
+			} else {
+				const currentHighlighted = cards.filter(c => c.highlighted).length;
+				if (currentHighlighted < highlightLimit) {
+					card.highlighted = true;
+				}
+			}
+			const idx = cards.indexOf(card);
+			if (idx >= 0) onCardClick?.(idx);
+		}
+
+		pointerState = null;
 	}
 
-	function handlePointerUp() {
-		if (dragIndex === null) return;
-		cards[dragIndex].dragging = false;
-		dragIndex = null;
-		alignCards();
+	function onPointerCancel() {
+		if (!pointerState) return;
+		if (pointerState.isDragging) {
+			pointerState.card.dragging = false;
+			draggedCard = null;
+		}
+		pointerState = null;
 	}
 </script>
 
@@ -203,9 +270,10 @@
 <div
 	class="card-area"
 	style="width: {areaWidth}px; height: {areaHeight}px; position: relative;"
-	onpointerdown={handlePointerDown}
-	onpointermove={handlePointerMove}
-	onpointerup={handlePointerUp}
+	onpointerdown={onPointerDown}
+	onpointermove={onPointerMove}
+	onpointerup={onPointerUp}
+	onpointercancel={onPointerCancel}
 >
 	{@render children?.()}
 </div>
